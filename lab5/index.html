@@ -1,0 +1,150 @@
+<html>
+
+<head>
+    <title>Lab 5</title>
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.7/angular.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.20.1/moment.min.js"></script>
+</head>
+
+<body ng-app="app" ng-controller="main">
+    <div style="font-size: 32px; margin: 20px">Current temp: {{temperature}} F</div>
+    <br>
+    <div class="container">
+        <div class="columns">
+            <div class="column col-6">
+                <div>Recent Temperatures</div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Temperature</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="temp in temps | orderBy:'-timestamp' | limitTo:10">
+                            <td>{{temp.timestamp}}</td>
+                            <td>{{temp.temperature}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="column col-6">
+                <div>Recent Violations</div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Temperature</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="temp in violations | orderBy:'-timestamp' | limitTo:10">
+                            <td>{{temp.timestamp}}</td>
+                            <td>{{temp.temperature}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <br>
+    <br>
+    <br>
+    <div class="divider"></div>
+    <div class="container">
+        <div class="columns">
+            <div class="column col-6">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-input" ng-model="profile.name">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-input" ng-model="profile.location">
+                </div>
+            </div>
+            <div class="column col-6">
+                <div class="form-group">
+                    <label class="form-label">Temperature Threshold</label>
+                    <input type="number" class="form-input" ng-model="profile.threshold">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">SMS Number</label>
+                    <input type="text" class="form-input" ng-model="profile.number">
+                </div>
+            </div>
+        </div>
+        <br>
+        <div class="columns">
+            <div class="column col-12">
+                <button class="btn" ng-click="send_profile()">Save</button>
+                <button class="btn" ng-click="reset()">Reset</button>
+            </div>
+        </div>
+    </div>
+</body>
+<script>
+    var app = angular.module('app', []);
+
+    app.controller('main', function($scope, $http, $interval) {
+
+        $scope.temperature = "??"
+        $scope.temps = []
+        $scope.violations = []
+        $scope.profile = {}
+
+        $interval(() => {
+            get_temperatures()
+        }, 2000)
+
+        var get_profile = () => {
+            $http.get("http://localhost:8080/sky/event/71mtyx2WGfmqdXA3Cpyxmt/123/sensor/get_profile").then(res => {
+                console.log(res)
+                $scope.profile = get_directive(res, "profile", "profile")
+            })
+        }
+
+        $scope.send_profile = () => {
+            $http.post("http://localhost:8080/sky/event/71mtyx2WGfmqdXA3Cpyxmt/123/sensor/profile_updated", $scope.profile)
+        }
+
+        $scope.reset = () => {
+            $http.get("http://localhost:8080/sky/event/71mtyx2WGfmqdXA3Cpyxmt/123/sensor/reading_reset")
+            get_temperatures()
+        }
+
+        var get_temperatures = () => {
+            $http.get("http://localhost:8080/sky/event/71mtyx2WGfmqdXA3Cpyxmt/123/wovyn/get_temps").then(res => {
+                $scope.temps = get_directive(res, "temperatures", "temps")
+                $scope.violations = get_directive(res, "temperatures", "violations")
+                $scope.temperature = $scope.temps.length > 0 ? $scope.temps[$scope.temps.length - 1].temperature : "??"
+            })
+        }
+
+        var get_directive = (obj, name, key) => {
+            var directives = obj.data.directives
+            for (var i = 0; i < directives.length; i++) {
+                if (directives[i].name == name) {
+                    return parse(directives[i].options[key])
+                }
+            }
+        }
+
+        var parse = (arr) => {
+            for (var i = 0; i < arr.length; i++) {
+                arr[i].timestamp = moment(arr[i].timestamp).format("hh:mm:ss - MMM Do")
+            }
+            return arr
+        }
+
+
+        get_temperatures()
+        get_profile()
+    })
+
+</script>
+
+</html>
