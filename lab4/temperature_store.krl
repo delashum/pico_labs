@@ -2,13 +2,14 @@ ruleset temperature_store {
   meta {
     shares __testing, temperatures, threshold_violations, inrange_temperatures
     provides temperatures, threshold_violations, inrange_temperatures
+    use module sensor_profile alias sensor
   }
   global {
     __testing = { "queries": [ { "name": "__testing" } ],
                   "events": [ ] };
                   
     temperatures = function() {
-      ent:temperatures;
+      ent:temperatures.defaultsTo([]);
     }
     
     threshold_violations = function() {
@@ -29,8 +30,7 @@ ruleset temperature_store {
       temp = data{"temperature"}
     }
     always {
-      ent:temperatures.defaultsTo([]);
-      ent:temperatures := ent:temperatures.append({
+      ent:temperatures := ent:temperatures.defaultsTo([]).append({
         "timestamp": timestamp,
         "temperature": temp
       })
@@ -38,7 +38,7 @@ ruleset temperature_store {
   }
   
   rule collect_threshold_violations {
-    select when wovyn threshold_violation
+    select when wovyn threshold_violation  where event:attr("temperature") > sensor:get_profile(){"threshold"}
     
     pre {
       data = event:attrs
@@ -58,15 +58,45 @@ ruleset temperature_store {
    rule clear_temeratures {
     select when sensor reading_reset
     
-    send_directive("logging ent variables", {
-      "temperatures": temperatures(),
-      "above_threshold": threshold_violations(),
-      "below_threshold": inrange_temperatures(75)
-    });
-    
     always {
       ent:above_temperatures := [];
       ent:temperatures := [];
     }
   }
+  
+  rule get_report_data {
+    select when sensor get_report
+    pre {
+      data = temperatures();
+      id = event:attrs{"id"};
+      eci = event:attrs{"eci"};
+    }
+    every {
+      event:send(
+      { "eci": eci, "eid": id,
+        "domain": "wovyn", "type": "report_results",
+        "attrs": {
+          "id": id,
+          "data": data,
+          "eci": meta:eci
+        }
+      }
+    )
+    }
+  }
+  
+  rule get_temperatures {
+    select when wovyn get_temps
+    
+    pre {
+      data = temperatures()
+      violation_data = threshold_violations()
+    }
+    
+    send_directive("temperatures",{
+      "temps": data,
+      "violations": violation_data
+    })
+  }
+  
 }

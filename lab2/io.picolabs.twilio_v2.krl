@@ -2,7 +2,7 @@ ruleset io.picolabs.twilio_v2 {
   meta {
     configure using account_sid = ""
                     auth_token = ""
-    provides send_sms
+    provides send_sms, messages
   }
  
   global {
@@ -14,9 +14,15 @@ ruleset io.picolabs.twilio_v2 {
                 "Body":message
             })
     }
-    get_sms = defaction() {
-       base_url = <<https://#{account_sid}:#{auth_token}@api.twilio.com/2010-04-01/Accounts/#{account_sid}/>>
-       http:get(base_url + "Messages", form = {}).klog(resp)
+    
+    messages = function(to,from,page=0) {
+       base_url = <<https://#{account_sid}:#{auth_token}@api.twilio.com/2010-04-01/Accounts/#{account_sid}/>>;
+       response = http:get(base_url + "Messages", qs = {
+                "from":from,
+                "to":to,
+                "page":page
+            });
+       response{"content"};
     }
   }
 }

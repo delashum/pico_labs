@@ -14,8 +14,14 @@ ruleset io.picolabs.use_twilio_v2 {
                    )
   }
  
-  rule test_send_sms {
+  rule test_get_sms {
     select when test get_message
-    twilio:get_sms()
+    pre {
+      response = twilio:messages(event:attr("to").defaultsTo(""),
+                    event:attr("from").defaultsTo(""),
+                    event:attr("page").defaultsTo(0)
+                   );
+    }
+    send_directive(response);
   }
 }

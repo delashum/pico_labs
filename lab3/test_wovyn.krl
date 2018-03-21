@@ -2,9 +2,11 @@ ruleset wovyn_base {
   meta {
     shares __testing
     use module io.picolabs.twilio_keys
+    use module sensor_profile alias sensor
     use module io.picolabs.twilio_v2 alias twilio
         with account_sid = keys:twilio{"account_sid"}
              auth_token =  keys:twilio{"auth_token"}
+    use module io.picolabs.subscription alias subscription
   }
   global {
     __testing = { "queries": [ { "name": "__testing" } ],
@@ -13,8 +15,6 @@ ruleset wovyn_base {
                               {
                                 "domain": "wovyn", "type": "threshold_violation"
                               } ] }
-    temperature_threshold = 70
-    to_number = "8013692448"
     from_number = "3853360777"
   }
  
@@ -43,17 +43,31 @@ ruleset wovyn_base {
     send_directive("threshold check",{"msg":msg});
     fired {
         raise wovyn event "threshold_violation" attributes {
+          "timestamp": time:now(),
           "temperature": data{"temperature"}
         }
     }
   }
   
    rule threshold_notification {
-    select when wovyn threshold_violation where event:attr("temperature") > 70
+    select when wovyn threshold_violation where event:attr("temperature") > sensor:get_profile(){"threshold"}
     
     pre {
-      data = event:attrs.klog();
+      data = event:attrs
+      parent_info = subscription:established("Rx_role", "manager")[0]
     }
-    twilio:send_sms(to_number,from_number,data{"temperature"});
+    // twilio:send_sms(sensor:get_profile(){"number"},from_number,data{"temperature"});
+    event:send({"eci": parent_info{"Tx"}, "eid": "subscription",
+        "domain": "manager", "type": "send_sms",
+        "attrs": { "data": data
+        }})
   }
+  
+  rule auto_accept {
+  select when wrangler inbound_pending_subscription_added
+  fired {
+    raise wrangler event "pending_subscription_approval"
+      attributes event:attrs
+  }
+}
 }
